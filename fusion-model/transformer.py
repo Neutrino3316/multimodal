@@ -19,8 +19,9 @@ class transformer(nn.Module):
     def forward(self, Audio, Text, Vision):
         input_modal = torch.cat((self.CLS, Audio, self.SEP, Text, self.SEP, Vision, self.SEP), 0)
         input_modal = torch.unsqueeze(input_modal, 0)
+        output = input_modal
         for encoder_block in self.enc:
-            output, enc_self_attn = encoder_block(input_modal)
+            output, enc_self_attn = encoder_block(output)
         output = self.linear(output)
         print(output.shape)
         output = torch.mean(output, dim=1)

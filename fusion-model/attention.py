@@ -64,8 +64,6 @@ class MultiHeadAttention(nn.Module):
         # self attention
         scale = -0.5
         context, attention = self.dotAttention(q, k, v, scale, mask)
-
-        # 才发现batch_size就是个备胎的骚操作
         context = context.view(batch_size, -1, num_head * d)
         output = self.linear_final(context)
         output = self.dropout(output)
