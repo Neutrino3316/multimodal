@@ -1,9 +1,13 @@
 # This file reads in features from each modal, and gathers to create a TensorDataset
+import os
+import pickle
 
+import numpy as np
 import torch
 from torch.utils.data import TensorDataset
 
 from audio_prec import preprocess_audio
+
 
 class Input_Features():
     def __init__(self, acoustic_input, visual_input, textual_input, label, unique_id=None):
@@ -52,11 +56,31 @@ def prepare_inputs(dataset):
 
 
 def get_label(data_type):
-    #TODO
+    """
+    read in annotations of data_type, and return a dict
+    return: labels: dict, the key is utterance_id and the value is a numpy array containing the label values
+    """
+    path = "../dataset/raw_data/annotations/"
+    filename = os.path.join(path, "annotation_" + data_type + ".pkl")
+    with open(filename, "rb") as f:
+        annotation = pickle.load(f, encoding='iso-8859-1')
+    label_types = annotations.keys()   # ['extraversion', 'neuroticism', 'agreeableness', 'conscientiousness', 'interview', 'openness']
+
+    utterance_ids = annotation['extraversion'].keys()
+    labels = dict([(utter_id, np.zeros(6)) for utter_id in utterance_ids])
+    
+    for i, key in enumerate(label_types):
+        for utter_id in utterance_ids:
+            labels[utter_id][i] = annotation[key][utter_id]
+    
+    return labels
 
 
 def save_TensorDataset(dataset, data_type):
-    #TODO
+    path = "../dataset/preprocessed/"
+    filename = os.path.join(path, data_type + ".pkl")
+    with open(filename, "wb") as f:
+        pickle.dump(dataset, f)
 
 
 def prepare_data(data_type):
@@ -68,7 +92,7 @@ def prepare_data(data_type):
     visual_data = preprocess_image(data_type)
     textual_data = preprocess_text(data_type)
 
-    labels = get_label(data_type)
+    labels = get_label(data_type)   # dict: (utterance_id, label); label: numpy array, size (6)
 
     dataset = gather_features(acoustic_data, visual_data, textual_data, labels)
     dataset = prepare_inputs(dataset)   # change to TensorDataset
