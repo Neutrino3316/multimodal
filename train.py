@@ -8,6 +8,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from data_utils.data_prep import prepare_data
+from models.model_audio import AudioModel
 
 import logging
 logger = logging.getLogger(__name__)
@@ -19,9 +20,14 @@ def get_args():
                                                                     "and training details")
 
     # model settings
+    ## overal settings
     parser.add_argument('--interview', action="store_true", help="whether to use")
+    parser.add_argument('--out_dim', type=int, default=768, help="dimension of features before fusion")
+    ## AudioModel settings
+    parser.add_argument('--audio_n_gru', type=int, default=2, help="number of gru layers")
 
     # experiment settings
+    parser.add_argument('--dropout', type=float, default=0.2, help="dropout rate")
     parser.add_argument('--n_epochs', type=int, default=30)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--accum_steps', type=int, default=1, help="gradient accumulation steps")
@@ -52,7 +58,16 @@ def load_data():
 
 
 def build_model(args):
+    audio_model = AudioModel(args)
+    text_model = TextModel(args)
+    vision_model = VisionModel(args)
+    fusion_model = FusionModel(args)
+    model = ThreeModalModel(audio_model, text_model, vision_model, fusion_model)
+    return model
 
+def build_optimizer(args, model):
+    # TODO
+    return optimizer
 
 
 if __name__ == '__main__':
@@ -69,7 +84,7 @@ if __name__ == '__main__':
 
     out_dir = os.path.join("../snapshots/", args.exp_name)
     if os.path.exists(out_dir):
-        raise ValueError("Output directory () already exists.")
+        raise ValueError("Output directory (%s) already exists." % out_dir)
     else:
         os.makedirs(out_dir)
 
@@ -95,3 +110,4 @@ if __name__ == '__main__':
     test_loader = DataLoader(dataset=testset, batch_size=args.batch_size, shuffle=False)
 
     model = build_model(args)
+    optimizer = build_optimizer(args, model)
