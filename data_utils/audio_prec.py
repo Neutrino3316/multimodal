@@ -12,7 +12,7 @@ path = "../dataset/raw_data/audio/"
 def preprocess_audio(data_type):
     files_dir = os.path.join(path, data_type)
     files_name = os.listdir(files_dir)
-    mp3_files = filter(lambda file: file.split(".")[-1] == "mp3", dir)  # filter out files in mp3 format
+    mp3_files = filter(lambda file: file.split(".")[-1] == "mp3", files_name)  # filter out files in mp3 format
     mp3_files = list(mp3_files)
 
     data = dict()
