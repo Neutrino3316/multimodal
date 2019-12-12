@@ -20,7 +20,7 @@ class Input_Features():
         self.unique_id = unique_id  # unique_id to identify examples, used in the test stage
 
 
-def gather_features(acoustic_data, visual_data, textual_data, labels):
+def gather_features(data_type, acoustic_data, visual_data, textual_data, labels):
     """
     gather the features of each example from the three modalities.
     acoustic_data: dict, keys are ids of each example, values are features of each example, each value is dict.
@@ -29,6 +29,7 @@ def gather_features(acoustic_data, visual_data, textual_data, labels):
     """
     dataset = []
     unique_id = 10000
+    id2utter = dict()
     for key in acoustic_data.keys():
         acoustic_input = acoustic_data[key]
         vidual_input = visual_data[key]
@@ -37,7 +38,9 @@ def gather_features(acoustic_data, visual_data, textual_data, labels):
 
         dataset.append(Input_Features(acoustic_input, vidual_input, textual_input, label, unique_id))
         unique_id += 1
-
+        id2utter[unique_id] = key
+    if data_type == 'test':
+        return dataset, id2utter
     return dataset
 
 
@@ -94,8 +97,16 @@ def prepare_data(data_type):
 
     labels = get_label(data_type)   # dict: (utterance_id, label); label: numpy array, size (6)
 
-    dataset = gather_features(acoustic_data, visual_data, textual_data, labels)
+    if data_type == 'test':
+        dataset, id2utter = gather_features(data_type, acoustic_data, visual_data, textual_data, labels)
+        path = "../dataset/preprocessed/"
+        with open(os.path.join(path, "test_id2utter" + ".pkl")) as f:
+            pickle.dump(id2utter, f)
+    else:
+        dataset = gather_features(data_type, acoustic_data, visual_data, textual_data, labels)
     dataset = prepare_inputs(dataset)   # change to TensorDataset
 
     save_TensorDataset(dataset, data_type)
+    if data_type == 'test':
+        return dataset, id2utter
     return dataset
