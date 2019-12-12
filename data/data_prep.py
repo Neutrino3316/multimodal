@@ -3,6 +3,8 @@
 import torch
 from torch.utils.data import TensorDataset
 
+from audio_prec import preprocess_audio
+
 class Input_Features():
     def __init__(self, acoustic_input, visual_input, textual_input, label, unique_id=None):
         self.acoustic_feature = acoustic_input['feature']   # n_frames x feat_dim
@@ -46,4 +48,30 @@ def prepare_inputs(dataset):
 
     dataset = TensorDataset(acoustic_features, acoustic_lens, visual_features, textual_input_ids, 
                             textual_attention_mask, labels, unique_ids)
+    return dataset
+
+
+def get_label(data_type):
+    #TODO
+
+
+def save_TensorDataset(dataset, data_type):
+    #TODO
+
+
+def prepare_data(data_type):
+    """
+    read data of data_type from scratch, and preprocess, then change to a TensorDataset
+    data_type: str, 'training', 'validation', 'test'
+    """
+    acoustic_data = preprocess_audio(data_type)  # dict: (file_id, features); features: dict, keys = ('feature', 'seq_len')
+    visual_data = preprocess_image(data_type)
+    textual_data = preprocess_text(data_type)
+
+    labels = get_label(data_type)
+
+    dataset = gather_features(acoustic_data, visual_data, textual_data, labels)
+    dataset = prepare_inputs(dataset)   # change to TensorDataset
+
+    save_TensorDataset(dataset, data_type)
     return dataset
