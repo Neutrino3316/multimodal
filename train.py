@@ -25,6 +25,9 @@ def get_args():
     parser.add_argument('--out_dim', type=int, default=768, help="dimension of features before fusion")
     ## AudioModel settings
     parser.add_argument('--audio_n_gru', type=int, default=2, help="number of gru layers")
+    ## VisionModel settings
+    parser.add_argument('--vision_n_lstm', type=int, default=1, help="number of lstm layers")
+    parser.add_argument('--vgg_param_dir', type=str, default="./dataset/pretrained_models/vgg_face_dag.pth")
 
     # experiment settings
     parser.add_argument('--dropout', type=float, default=0.2, help="dropout rate")
