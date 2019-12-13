@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from Vgg_face import vgg_face_dag
 
 
 class FullConnect(nn.Module):
@@ -28,24 +29,34 @@ class MyBiLSTM(nn.Module):
         self.linear = nn.Linear(hidden_dim * 2, n_class)
         self.sigmod = nn.Sigmoid()
 
-    def forward(self, inputs):
-        outputs = self.vgg_16(inputs)
-        outputs = outputs.unsqueeze(1)
-        out, _ = self.lstm(outputs)  # (image_num, batch_size, feature_dim)
-        out = out.squeeze(1)  # (image_num, feature_dim)
-        out = self.linear(out)  # (image_num, n_class)
-        out, _ = torch.max(out, dim=0)
-        out = out.unsqueeze(0)
-        out = self.sigmod(out)
+    def forward(self, inputs, batch_size):
+        outputs = self.vgg_16(inputs)  # (batch_size*seq_len, feature_dim)
+        # print(outputs.shape)
+        outputs = outputs.view(batch_size, -1, 2622)  # (batch_size, seq_len, feature_dim)
+        outputs = torch.transpose(outputs, 0, 1)  # (seq_len, batch_size, feature_dim)
+        # print(outputs.shape)
+        out, _ = self.lstm(outputs)  # (seq_len, batch_size, feature_dim)
+        # print(out.shape)
+        # out = out.squeeze(1)  # (seq_len, feature_dim)
+        out = self.linear(out)  # (seq_len, batch_size, n_class)
+        # print(out.shape)
+        out, _ = torch.max(out, dim=0)  # (batch_size, n_class)
+        # print(out.shape)
+        out = self.sigmod(out)  # (batch_size, n_class)
+        # print(out.shape)
         return out
 
 
-# if __name__ == '__main__':
-#     final_sample = torch.zeros([1, 1000])
-#     for i in range(10):
-#         test_sample = torch.randn(1, 1000)
-#         final_sample = torch.cat((final_sample, test_sample), 0)
-#     final_sample = final_sample[1:, :]
-#     test = MyBiLSTM(1000, 1000, 1, 5)
-#     test_sample = final_sample.unsqueeze(1)
-#     out = test.forward(test_sample)
+if __name__ == '__main__':
+    final_sample = torch.zeros([1, 3, 224, 224])
+    for i in range(20):
+        test_sample = torch.randn(1, 3, 224, 224)
+        final_sample = torch.cat((final_sample, test_sample), 0)
+    final_sample = final_sample[1:, :]
+    vgg = vgg_face_dag('./data/vgg_face_dag.pth')
+    test = MyBiLSTM(2622, 2622, 1, 5, vgg)
+    print(test_sample.shape)
+    out = test.forward(final_sample, 2)
+
+    test_mean = torch.randn(3, 5)
+    print(test_mean.mean(dim=0))
