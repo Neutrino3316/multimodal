@@ -49,23 +49,23 @@ def randomGetImage(all_image, interval):
 
 
 all_images = {}
-path = 'data/ImageData/trainingData'
+path = 'data/ImageData/testData'
 files = os.listdir(path)
 for file in files:
     images_path = os.path.join(path, file)
     all_image = os.listdir(images_path)
-    interval = 0
-    if np.mean(videos_OCEAN_labels[file + '.mp4']) < 0.5 or np.mean(videos_OCEAN_labels[file + '.mp4']) > 0.7:
-        interval = 30
-    else:
-        interval = 15
+    interval = 15
+    # if np.mean(videos_OCEAN_labels[file + '.mp4']) < 0.5 or np.mean(videos_OCEAN_labels[file + '.mp4']) > 0.7:
+    #     interval = 30
+    # else:
+    #     interval = 15
     all_images[file] = randomGetImage(all_image, interval)
     try:
-        if not os.path.exists('data/ImageData/select_trainingData/' + file):
-            os.makedirs('data/ImageData/select_trainingData/' + file)
+        if not os.path.exists('data/ImageData/select_testData/' + file):
+            os.makedirs('data/ImageData/select_testData/' + file)
             for image_name in all_images[file]:
                 image = cv2.imread(path + '/' + file + '/' + image_name + '.jpg')
-                address = 'data/ImageData/select_trainingData/' + file + '/' + image_name + '.jpg'
+                address = 'data/ImageData/select_testData/' + file + '/' + image_name + '.jpg'
                 cv2.imwrite(address, image)
             print(path + '/' + file)
     except OSError:

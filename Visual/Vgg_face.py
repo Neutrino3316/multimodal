@@ -103,3 +103,11 @@ def vgg_face_dag(weights_path=None, **kwargs):
         state_dict = torch.load(weights_path)
         model.load_state_dict(state_dict)
     return model
+
+
+if __name__ == '__main__':
+    vgg = vgg_face_dag('./data/vgg_face_dag.pth')
+    videos = torch.FloatTensor(10 * 1, 3, 224, 224)
+    output = vgg(videos)
+    output = output.view(10, 1, -1)
+    print(output.shape)

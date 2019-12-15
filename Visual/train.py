@@ -130,20 +130,20 @@ i = 0
 small_test = 0  # use for small sample test
 for epoch in range(20):
     total_loss = 0
-    for batch_files, train_labels in batch_iter(files, videos_OCEAN_labels, batch_size=256):
+    for batch_files, train_labels in batch_iter(files, videos_OCEAN_labels, batch_size=32):
         print('start new batch')
         count_file = 0
-        for file in tqdm(batch_files):
+        video_out = torch.zeros([1, 3, 224, 224])
+        labels = torch.zeros([1, 5])
+        for file in batch_files:
             count_file += 1
             images_path = os.path.join(path, file)
             all_image = os.listdir(images_path)
             all_images[file] = all_image
-            log_probs = torch.zeros([1, 5])
             label = train_labels[file + '.mp4']
             label = torch.FloatTensor(label)
             label = torch.unsqueeze(label, 0)
-            label = label.to(device)
-            video_out = torch.zeros([1, 3, 224, 224])
+            labels.cat((labels, label), 0)
             for image_name in all_images[file]:
                 image = path + '/' + file + '/' + image_name    # os.path.join()
                 image = Image.open(image)
@@ -153,14 +153,23 @@ for epoch in range(20):
                 # image = image.to(device)
                 # out = vgg(image)
                 video_out = torch.cat((video_out, image), 0)
-            video_out = video_out[1:, :]
-            # video_out = video_out.unsqueeze(1)
-            model.zero_grad()
-            log_prob = model(video_out.to(device))
-            loss = loss_function(log_prob, label)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss
+
+        video_out = video_out[1:, :]
+        labels = labels[1:, :]
+        model.zero_grad()
+        log_prob = model(video_out.to(device), batch_size=32)
+        loss = loss_function(log_prob, labels.to(device))
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.mean(dim=0)
+        # video_out = video_out[1:, :]
+        # # video_out = video_out.unsqueeze(1)
+        # model.zero_grad()
+        # log_prob = model(video_out.to(device))
+        # loss = loss_function(log_prob, label)
+        # loss.backward()
+        # optimizer.step()
+        # total_loss += loss
     print('finish epoch: ', epoch)
     losses.append(total_loss)
     torch.save(model, './model5/model' + str(epoch) + '.pkl')
