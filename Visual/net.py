@@ -25,7 +25,7 @@ class MyBiLSTM(nn.Module):
         self.vgg_16 = vgg_face
         self.n_layer = n_layer
         self.hidden_dim = hidden_dim
-        self.lstm = nn.LSTM(in_dim, hidden_dim, n_layer, batch_first=True, dropout=dropout, bidirectional=True)
+        self.lstm = nn.LSTM(in_dim, hidden_dim, n_layer, dropout=dropout, bidirectional=True)
         self.linear = nn.Linear(hidden_dim * 2, n_class)
         self.sigmod = nn.Sigmoid()
 

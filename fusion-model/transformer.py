@@ -14,7 +14,9 @@ class transformer(nn.Module):
         self.enc = nn.ModuleList([encoder(num_layers, model_dim, num_heads, ffn_dim, dropout)
                                   for _ in range(transformer_layer)])
         self.linear = nn.Linear(model_dim, 5, bias=False)
-        self.softmax = nn.Softmax(dim=1)
+        # self.sigmoid = nn.Sigmoid()
+        ## fit for Multimodal-Transformer
+        self.output_linear = nn.Linear(5, 1, bias=False)
 
     def forward(self, Audio, Text, Vision):
         input_modal = torch.cat((self.CLS, Audio, self.SEP, Text, 
@@ -25,8 +27,10 @@ class transformer(nn.Module):
             output, enc_self_attn = encoder_block(output)
         output = self.linear(output)
         print(output.shape)
-        output = torch.mean(output, dim=1)
-        output = self.softmax(output)
+        # output = output[:, 0:6, :]
+        ## fit for Multimodal-Transformers
+        output = output[:, 0, :]
+        output = self.output_linear(output) ## (batch_size, 1)
         return output, enc_self_attn
 
 
