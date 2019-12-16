@@ -46,8 +46,7 @@ class VisionModel(nn.Module):
         super(VisionModel, self).__init__()
         self.vgg_face = build_vgg(args.vgg_param_dir)
         out_dim, dropout = args.out_dim, args.dropout
-        self.lstm = nn.LSTM(input_size=2622, hidden_size=out_dim, num_layers=args.vision_n_gru, 
-                            batch_first=True, dropout=dropout, bidirectional=True)
+        self.lstm = nn.LSTM(input_size=2622, hidden_size=out_dim, num_layers=args.vision_n_gru, dropout=dropout, bidirectional=True)
         self.linear = nn.Sequential([nn.Linear(out_dim*2, out_dim),
                                         nn.ReLU(),
                                         nn.Dropout(dropout)])
