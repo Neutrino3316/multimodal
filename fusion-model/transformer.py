@@ -14,7 +14,7 @@ class transformer(nn.Module):
         self.enc = nn.ModuleList([encoder(num_layers, model_dim, num_heads, ffn_dim, dropout)
                                   for _ in range(transformer_layer)])
         self.linear = nn.Linear(model_dim, 5, bias=False)
-        self.softmax = nn.Softmax(dim=1)
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, Audio, Text, Vision):
         input_modal = torch.cat((self.CLS, Audio, self.SEP, Text, self.SEP, Vision, self.SEP), 0)
@@ -24,8 +24,8 @@ class transformer(nn.Module):
             output, enc_self_attn = encoder_block(output)
         output = self.linear(output)
         print(output.shape)
-        output = torch.mean(output, dim=1)
-        output = self.softmax(output)
+        output = output[:, 0:6, :]
+        output = self.sigmoid(output)
         return output, enc_self_attn
 
 

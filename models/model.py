@@ -52,9 +52,18 @@ class VisionModel(nn.Module):
                                         nn.ReLU(),
                                         nn.Dropout(dropout)])
 
-    def forward(self, x_conv):
-        # TODO
-
+    def forward(self, x_conv, batch_size):
+        """
+        param x_conv: (seq_len*batch_size, 3, 224, 224)
+        param batch_size: > 1
+        """
+        outputs = self.vgg_16(inputs)  # (batch_size*seq_len, feature_dim)
+        outputs = outputs.view(batch_size, -1, 2622)  # (batch_size, seq_len, feature_dim)
+        outputs = torch.transpose(outputs, 0, 1)  # (seq_len, batch_size, feature_dim)
+        out, _ = self.lstm(outputs)  # (seq_len, batch_size, feature_dim)
+        out = self.linear(out) # (seq_len, batch_size, n_class)
+        out, _ = torch.max(out, dim=0) # (batch_size, n_class)
+        return out
 
 class TriModalModel(nn.Module):
     def __init__(self, args):
