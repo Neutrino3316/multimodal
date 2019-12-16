@@ -54,8 +54,13 @@ def prepare_inputs(dataset):
     labels = torch.FloatTensor([f.label for f in dataset])
     unique_ids = torch.LongTensor([f.unique_id for f in dataset])
 
+    total_len = labels.shape[0] + acoustic_lens + visual_features.shape[0] + 2
+    fusion_attention_mask = torch.ones(total_len).long()
+    fusion_attention_mask = torch.cat([textual_attention_mask, fusion_attention_mask], 0)
+
+
     dataset = TensorDataset(acoustic_features, acoustic_lens, visual_features, textual_input_ids, 
-                            textual_attention_mask, labels, unique_ids)
+                            textual_attention_mask, fusion_attention_mask, labels, unique_ids)
     return dataset
 
 

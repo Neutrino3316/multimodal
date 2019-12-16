@@ -17,7 +17,8 @@ class transformer(nn.Module):
         self.softmax = nn.Softmax(dim=1)
 
     def forward(self, Audio, Text, Vision):
-        input_modal = torch.cat((self.CLS, Audio, self.SEP, Text, self.SEP, Vision, self.SEP), 0)
+        input_modal = torch.cat((self.CLS, Audio, self.SEP, Text, 
+                                self.SEP, Vision, self.SEP), 0)
         input_modal = torch.unsqueeze(input_modal, 0)
         output = input_modal
         for encoder_block in self.enc:

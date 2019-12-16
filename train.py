@@ -8,10 +8,11 @@ import torch
 from torch.utils.data import DataLoader
 
 from data_utils.data_prep import prepare_data
-from models.model_audio import AudioModel
+from models.model import TriModalModel
 
 import logging
 logger = logging.getLogger(__name__)
+
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -28,6 +29,21 @@ def get_args():
     ## VisionModel settings
     parser.add_argument('--vision_n_lstm', type=int, default=1, help="number of lstm layers")
     parser.add_argument('--vgg_param_dir', type=str, default="./dataset/pretrained_models/vgg_face_dag.pth")
+    ## TextModel settings
+    parser.add_argument('--model_name_or_path', default=None, type=str, required=True,
+                        help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS))
+    parser.add_argument('--textual_model_type', type=str, required=True, 
+                        help="Model type selected in the list: " + ", ".join(MODEL_CLASSES.keys()))
+    parser.add_argument('--config_name', default="", type=str,
+                        help="Pretrained config name or path if not the same as model_name"))
+    parser.add_argument('--cache_dir', default="", type=str,
+                        help="Where do you want to store the pre-trained models downloaded from s3")
+    ## FusionModel settings
+    parser.add_argument('--transformer_dropout', default=0.1, type=float, help="dropout rate for transformer")
+    parser.add_argument('--n_fusion_layers', default=6, type=int, help="number of encoder layers for fusion module")
+    parser.add_argument('--fusion_hid_dim', default=768, type=int, help="hidden size for encoder layers in fusion module")
+    parser.add_argument('--n_attn_heads', default=8, type=int, help="number of heads for attention")
+    parser.add_argument('--fusion_ffw_dim', default=2048, type=int, help="dim for feed forward layers in encoder")
 
     # experiment settings
     parser.add_argument('--dropout', type=float, default=0.2, help="dropout rate")
@@ -45,6 +61,14 @@ def get_args():
     args = parser.parse_args()
     print(args)
     return args
+
+
+def set_seed(args):
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if n_gpu > 0:
+        torch.cuda.manual_seed_all(args.seed)
 
 
 def load_data():
@@ -79,15 +103,11 @@ if __name__ == '__main__':
     device = torch.device("cuda")
     n_gpu = torch.cuda.device_count()
 
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    if n_gpu > 0:
-        torch.cuda.manual_seed_all(args.seed)
+    set_seed(args)
 
     out_dir = os.path.join("../snapshots/", args.exp_name)
     if os.path.exists(out_dir):
-        raise ValueError("Output directory (%s) already exists." % out_dir)
+        raise ValueError("Output directory ({}) already exists.".format(out_dir))
     else:
         os.makedirs(out_dir)
 
