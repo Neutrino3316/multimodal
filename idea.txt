@@ -1,3 +1,4 @@
 1. using COVAREP to extract audio features, instead of pyAudioAnalysis
 2. incorporate modality embeddings and position embeddings
 3. no lstm for visual uni-encoding
+4. initialize CLS tokens with average outputs of unimodal

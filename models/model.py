@@ -2,19 +2,9 @@ import torch
 import torch.nn as nn
 
 from Vgg_face import build_vgg
+from transformer import Encoder
 
-from transformers import (WEIGHTS_NAME, BertConfig,
-                                  BertForSequenceClassification, BertTokenizer,
-                                  RobertaConfig,
-                                  RobertaForSequenceClassification,
-                                  RobertaTokenizer,
-                                  XLMConfig, XLMForSequenceClassification,
-                                  XLMTokenizer, XLNetConfig,
-                                  XLNetForSequenceClassification,
-                                  XLNetTokenizer,
-                                  DistilBertConfig,
-                                  DistilBertForSequenceClassification,
-                                  DistilBertTokenizer)
+from transformers import BertModel
 
 
 class AudioModel(nn.Module):
@@ -55,7 +45,7 @@ class AudioModel(nn.Module):
 
 
 class VisionModel(nn.Module):
-    def __init__(self, args)
+    def __init__(self, args):
         super(VisionModel, self).__init__()
         self.vgg_face = build_vgg(args.vgg_param_dir)
         self.vgg_out_dim = 2622
@@ -80,7 +70,7 @@ class VisionModel(nn.Module):
 
 
 class TextModel(nn.Module):
-    def __init__(self, args)
+    def __init__(self, args):
         super(TextModel, self).__init__()
         
         self.bert = BertModel.from_pretrained(args.model_name_or_path)
@@ -95,106 +85,28 @@ class TextModel(nn.Module):
         return outputs
 
 
-class PositionwiseFeedForward(nn.Module):
-    """docstring for PositionwiseFeedForward"""
-
-    def __init__(self, d_in, d_hid, dropout=0.1):
-        super(PositionwiseFeedForward, self).__init__()
-        self.w1 = nn.Linear(d_in, d_hid)
-        self.w2 = nn.Linear(d_hid, d_in)
-
-    def forward(self, x):
-        output = self.w2(F.relu(self.w1(x)))
-        return output
-
-
-class ScaleDotProductAttention(nn.Module):
-    """docstring for ScaleDotProductAttention"""
-
-    def __init__(self, dropout=0.0):
-        super(ScaleDotProductAttention, self).__init__()
-        self.softmax = nn.Softmax(dim=-1)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, q, k, v, mask=None):
-        """
-        q, k, v: [batch_size, file_size, word_embedding_size]
-        """
-        dk = q.shape[2]
-        attention = torch.bmm(q, k.transpose(1, 2)) / np.sqrt(dk)  # [b, n, m]*[b, m, n] batch matrix-matrix product
-        if mask:
-            attention = attention.masked_fill_(mask, -np.inf)
-        attention = self.softmax(attention)
-        attention = self.dropout(attention)
-        context = torch.bmm(attention, v)
-        return context, attention
-
-
-class MultiHeadAttention(nn.Module):
-    def __init__(self, model_dim=768, num_heads=8, dropout=0.1)
-        super(MultiHeadAttention, self).__init__()
-        self.d = model_dim // num_head
-        self.num_head = num_head
-        # [batch_size, file_size, self.num_head*self.d]
-        self.linear_k = nn.Linear(model_dim, self.num_head * self.d)
-        self.linear_q = nn.Linear(model_dim, self.num_head * self.d)
-        self.linear_v = nn.Linear(model_dim, self.num_head * self.d)
-
-        self.dotAttention = ScaleDotProductAttention(dropout)
-
-    def forward(self, key, value, query, mask=None):
-        d = self.d
-        num_head = self.num_head
-        batch_size = key.shape[0]
-        # linear projection
-        k = self.linear_k(key)
-        q = self.linear_q(query)
-        v = self.linear_v(value)
-
-        # tensor transform
-        k = k.view(batch_size * num_head, -1, d)
-        q = q.view(batch_size * num_head, -1, d)
-        v = v.view(batch_size * num_head, -1, d)
-
-        # self attention
-        context, attention = self.dotAttention(q, k, v, mask)
-        context = context.view(batch_size, -1, num_head * d)
-
-        return output, attention
-
-
-class EncoderLayer(nn.Module):
-    def __init__(self, model_dim=768, num_heads=8, ffw_dim=2048, dropout=0.1):
-        super(EncoderLayer, self).__init__()
-        self.Attention = MultiHeadAttention(model_dim, num_heads, dropout)
-        self.LN1 = nn.LayerNorm(model_dim)
-        self.dropout1 = nn.Dropout(dropout)
-        self.Feed_forward = PositionwiseFeedForward(model_dim, ffw_dim, dropout)
-        self.LN2 = nn.LayerNorm(model_dim)
-        self.dropout2 = nn.Dropout(dropout)
-
-    def forward(self, x, attn_mask=None):
-        context, attention = self.Attention(x, x, x, attn_mask)
-        x = self.LN1(x + self.dropout1(context))
-        output = self.Feed_forward(x)
-        output = self.LN2(x + self.dropout2(output))
-        return output, attention
-
-
-class Transformer_Encoder(nn.Module):
+class FusionModel(nn.Module):
     def __init__(self, args):
-        super(Transformer_Encoder, self).__init__()
-        num_layers, model_dim, num_heads, ffw_dim, dropout = 
+        super(FusionModel, self).__init__()
+        num_layers, model_dim, num_heads, ffw_dim, dropout = \
             args.n_fusion_layers, args.fusion_hid_dim, args.n_attn_heads, args.fusion_ffw_dim, args.transformer_dropout
-        self.encoder_layers = nn.ModuleList([EncoderLayer(model_dim, num_heads, ffw_dim, dropout) 
-                                            for _ in range(num_layers)])
+        self.encoder = Encoder(num_layers, model_dim, num_heads, ffw_dim, dropout)
 
     def forward(self, x, attn_mask=None):
-        attentions = ()
-        for enc in self.encoder_layers:
-            x, attention = enc(x, attn_mask)
-            attentions = attentions + (attention, )
+        x, attentions = self.encoder(x, attn_mask)
         return x, attentions
+
+
+class Pooler(nn.Module):
+    def __init__(self, args):
+        super(Pooler, self).__init__()
+        self.dense = nn.Linear(args.out_dim, args.out_dim // 2)
+        self.activation = nn.Tanh()
+
+    def forward(self, hidden_state):
+        pooled_output = self.dense(hidden_state)
+        pooled_output = self.activation(pooled_output)
+        return pooled_output
 
 
 class TriModalModel(nn.Module):
@@ -204,19 +116,38 @@ class TriModalModel(nn.Module):
         self.audio_module = AudioModel(args)
         self.text_module = TextModel(args)
         self.vision_module = VisionModel(args)
-        self.fusion_module = Transformer_Encoder(args)
+        self.fusion_module = FusionModel(args)
 
-        num_labels = if args.interview else 5
+        self.num_labels = 6 if args.interview else 5
         self.CLS = nn.Parameter(torch.FloatTensor(num_labels, args.out_dim))
         self.SEP = nn.Parameter(torch.FloatTensor(1, args.out_dim))
 
-        self.classifier = nn.Sequential()
+        self.classifiers = nn.ModuleList([nn.Sequential([
+                                            Pooler(args),
+                                            nn.Dropout(args.dropout),
+                                            nn.Linear(args.out_dim//2, 1),
+                                            nn.Sigmoid()])
+                                         for _ in range(self.num_labels)])
 
-    def forward(self, audio_feature, audio_len, vision_feature, text_input_ids, text_attn_mask, fusion_attn_mask, y):
+    def forward(self, audio_feature, audio_len, vision_feature, text_input_ids, 
+                text_attn_mask, fusion_attn_mask, labels=None):
         audio_x = self.audio_module(audio_feature, audio_len)
         text_x = self.text_module(text_input_ids, text_attn_mask)
         vision_x = self.vision_module(vision_feature)
 
-        fusion_input = torch.cat([self.CLS, audio_x, self.SEP, vision_x, self.SEP, text_x], 1)
-        
-        fusion_x = self.fusion_module(fusion_input, fusion_attn_mask)
+        fusion_input = torch.cat([self.CLS, audio_x, self.SEP, vision_x, self.SEP, text_x], 1)        
+        fusion_x, _ = self.fusion_module(fusion_input, fusion_attn_mask)
+
+        logits = ()
+        for i, clf in enumerate(self.classifiers):
+            hidden_state = fusion_x[:, i]
+            logit = clf(hidden_state)
+            logits = logits + (logit, )
+        logits = torch.stack(logits)
+
+        outputs = (logits, )
+        if labels is not None:
+            
+            # TODO
+        return outputs
+    

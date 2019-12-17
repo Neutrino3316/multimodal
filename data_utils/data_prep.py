@@ -59,8 +59,8 @@ def prepare_inputs(dataset):
     fusion_attention_mask = torch.cat([textual_attention_mask, fusion_attention_mask], 0)
 
 
-    dataset = TensorDataset(acoustic_features, acoustic_lens, visual_features, textual_input_ids, 
-                            textual_attention_mask, fusion_attention_mask, labels, unique_ids)
+    dataset = TensorDataset(unique_ids, acoustic_features, acoustic_lens, visual_features, textual_input_ids, 
+                            textual_attention_mask, fusion_attention_mask, labels)
     return dataset
 
 
