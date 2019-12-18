@@ -36,3 +36,7 @@ def preprocess_audio(data_type):
         data[utterance_id] = {'feature': feature, 'seq_len': seq_len}
         
     return data
+
+
+if __name__ == '__main__':
+    dataset = preprocess_audio('train')

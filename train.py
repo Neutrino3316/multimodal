@@ -11,8 +11,8 @@ from torch.utils.data import DataLoader
 
 from transformers import get_linear_schedule_with_warmup
 
-from data_utils.data_prep import prepare_data
-from models.model import TriModalModel
+from data_utils import prepare_data
+from models import TriModalModel
 
 import logging
 logger = logging.getLogger(__name__)
@@ -286,7 +286,7 @@ if __name__ == '__main__':
     if n_labels == 5:
         labels_names.remove('interview')
 
-    data_dir = os.path.join(args.data_path, "preprocessed/")
+    data_dir = os.path.join("./dataset/", "preprocessed/")
     if os.path.exists(data_dir) and os.listdir(data_dir):
         trainset, validset, testset, id2utter = load_data()
     else:

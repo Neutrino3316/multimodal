@@ -2,3 +2,4 @@
 2. incorporate modality embeddings and position embeddings
 3. no lstm for visual uni-encoding
 4. initialize CLS tokens with average outputs of unimodal
+5. use the first order difference of audio features
