@@ -13,15 +13,13 @@ class ScaleDotProductAttention(nn.Module):
         self.softmax = nn.Softmax(dim=2)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, q, k, v, scale=None, mask=None):
+    def forward(self, q, k, v, mask=None):
         """
         其中q,k,v大小一致，都是[batch_size, file_size, word_embedding_size]
         返回上下文张量和attention分数
         """
         dk = q.shape[2]
         attention = torch.bmm(q, k.transpose(1, 2)) / np.sqrt(dk)  # [b, n, m]*[b, m, n] batch matrix-matrix product
-        if scale:
-            attention = attention * scale
         if mask:
             attention = attention.masked_fill_(mask, -np.inf)
         attention = self.softmax(attention)
@@ -62,8 +60,7 @@ class MultiHeadAttention(nn.Module):
         v = v.view(batch_size * num_head, -1, d)
 
         # self attention
-        scale = -0.5
-        context, attention = self.dotAttention(q, k, v, scale, mask)
+        context, attention = self.dotAttention(q, k, v, mask)
         context = context.view(batch_size, -1, num_head * d)
         output = self.linear_final(context)
         output = self.dropout(output)
