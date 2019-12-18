@@ -8,6 +8,7 @@ from torch.utils.data import TensorDataset
 
 from audio_prec import preprocess_audio
 from vision_prec import preprocess_image
+from textual_prec import preprocess_text
 
 
 class Input_Features():

@@ -3,6 +3,7 @@ import pickle
 import os
 import random
 from tqdm import tqdm
+import json
 
 import numpy as np
 import torch
@@ -92,9 +93,12 @@ def set_seed(args):
 
 
 class TriModalTrainer():
-    def __init__(self, args, logger, model, trainset, validset, testset, labels_names):
+    def __init__(self, args, logger, model, trainset, validset, testset, 
+            labels_names, id2utter):
         self.args = args
         self.labels_names = labels_names
+        self.id2utter = id2utter
+
         self.n_valid, self.n_test = len(validset), len(testset)
         self.train_loader = DataLoader(dataset=trainset, batch_size=args.batch_size, shuffle=True)
         self.valid_loader = DataLoader(dataset=validset, batch_size=args.batch_size, shuffle=False)
@@ -186,7 +190,7 @@ class TriModalTrainer():
 
             tmp_valid_loss, logits = model(**inputs)
             valid_loss += tmp_valid_loss.mean().item()
-            tmp_err = torch.sum(torch.abs(labels, logits), dim=0)
+            tmp_err = torch.sum(torch.abs(inputs['labels'], logits), dim=0)
             error = error + err.detach().cpu().numpy()
 
         error = error / self.n_valid
@@ -206,17 +210,56 @@ class TriModalTrainer():
         self.logger.info(f"Loaded model checkpoint from {checkpoint_dir}")
         self.model.eval()
 
+        predictions = dict()
+        test_loss = 0.
+        error = np.zeros(self.n_labels)
+        for batch in tqdm(self.test_loader, desc="Testing"):
+            batch = tuple(t.to(args.device) for t in batch)
+
+            unique_id = batch[0]
+            inputs = {'audio_feature': batch[1], 'audio_len': batch[2], 'vision_feature': batch[3], 
+                'text_input_ids': batch[4], 'text_attn_mask': batch[5], 'fusion_attn_mask': batch[6], 
+                'labels': batch[7]}
+            tmp_test_loss, logits = model (**inputs)
+            test_loss += tmp_test_loss.mean().item()
+            tmp_err = torch.sum(torch.abs(inputs['labels'], logits), dim=0)
+            error = error + err.detach().cpu().numpy()
+
+            preds = logits.detach().cpu().numpy()
+            for i, id in enumerate(unique_id.detach().cpu().numpy().tolist()):
+                cur_pred = preds[i].tolist()
+                predictions[self.id2utter[id]] = dict()
+                for i, name in enumerate(self.labels_names):
+                    predictions[self.id2utter[id]][name] = cur_pred[i]
+        
+        error = error / self.n_test
+        accuracy = 1 - error
+        avg_acc = np.mean(accuracy)
+
+        log_str = f"Epoch {epoch}; accuracy {avg_acc}: "
+        for i, name in enumerate(self.labels_names):
+            log_str += f"{name} {accuracy[i]}/"
+        self.logger.info(log_str)
+
+        out_dir = os.path.join("./snapshots/", self.args.exp_name)
+        with open(os.path.join(out_dir, "predictions.json"), "w") as f:
+            json.dump(predictions, f)
 
 
     def save_checkpoint(self, epoch):
-        out_dir = os.path.join("../snapshots/", self.args.exp_name)
+        out_dir = os.path.join("./snapshots/", self.args.exp_name)
         output_model_file = os.path.join(out_dir, f"e_{epoch}.pt")
         torch.save(self.model.state_dict(), output_model_file)
         self.logger.info(f"Saving checkpoint to {output_model_file}.")
 
 
-def remove_useless_checkpoint():
-    # TODO
+def remove_useless_checkpoint(out_dir, best_pt):
+    all_files = os.listdir(out_dir)
+    pt_files = list(filter(lambda file: file.split(".")[-1] == "pt", all_files))
+    pt_files.remove(best_pt)
+    for f in pt_files:
+        os.remove(f)
+
 
 
 if __name__ == '__main__':
@@ -227,7 +270,7 @@ if __name__ == '__main__':
 
     set_seed(args)
 
-    out_dir = os.path.join("../snapshots/", args.exp_name)
+    out_dir = os.path.join("./snapshots/", args.exp_name)
     if os.path.exists(out_dir):
         raise ValueError("Output directory ({}) already exists.".format(out_dir))
     else:
@@ -251,7 +294,8 @@ if __name__ == '__main__':
         testset, id2utter = prepare_data('test')
 
     model = TriModalModel(args)
-    trainer = TriModalTrainer(args, logger, model, trainset, validset, testset, labels_names)
+    trainer = TriModalTrainer(args, logger, model, trainset, validset, testset, 
+                            labels_names, id2utter)
 
     accuracy = trainer.train()
 
@@ -259,4 +303,4 @@ if __name__ == '__main__':
     input_model_file = os.path.join(out_dir, f"e_{best_epoch}.pt")
 
     audio_trainer.test(input_model_file)
-    remove_useless_checkpoint(input_model_file)
+    remove_useless_checkpoint(out_dir, input_model_file)

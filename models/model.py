@@ -147,7 +147,15 @@ class TriModalModel(nn.Module):
 
         outputs = (logits, )
         if labels is not None:
-            
-            # TODO
+            loss = self.compute_MSELoss(labels, logits)
+            outputs = (loss,) + outputs
+
         return outputs
+
+    @staticmethod
+    def compute_MSELoss(labels, predictions):
+        losses = torch.pow(labels - predictions, 2)
+        loss = torch.sum(losses, dim=1)
+        loss = torch.mean(loss)
+        return loss
     
