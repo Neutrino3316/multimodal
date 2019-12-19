@@ -23,6 +23,7 @@ def preprocess_image(data_type):
         for image_name in all_image:
             image = os.path.join(images_path, image_name)
             image = Image.open(image)
+            image = trans(image)
             image.unsqueeze_(dim=0)
             video_out = torch.cat((video_out, image), 0)
         video_out = video_out[1:, :]
