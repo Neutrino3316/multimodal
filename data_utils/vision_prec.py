@@ -5,6 +5,7 @@ from torchvision import transforms
 from PIL import Image
 import torch
 
+import pdb
 
 path = '../dataset/raw_data/vision/'
 def preprocess_image(data_type):
@@ -19,12 +20,18 @@ def preprocess_image(data_type):
     for file in files_name:
         images_path = os.path.join(files_dir, file)
         all_image = os.listdir(images_path)
-        video_out = torch.zeros([1, 3, 224, 224])
+        video_out = []
         for image_name in all_image:
             image = os.path.join(images_path, image_name)
             image = Image.open(image)
-            image.unsqueeze_(dim=0)
-            video_out = torch.cat((video_out, image), 0)
-        video_out = video_out[1:, :]
+            pdb.set_trace()
+            video_out.append(image)
+        video_out = torch.stack(video_out)
+
         data[file] = {'feature':video_out}  
     return data  
+
+
+if __name__ == '__main__':
+    dataset = preprocess_image('test')
+    pdb.set_trace()
