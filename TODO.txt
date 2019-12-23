@@ -1,1 +1,2 @@
-1. add mask to acoustic
+1. add mask to acoustic     finished
+2. test audio_prec.py, text_prec.py, vision_prec.py, model.py, respectively

@@ -7,26 +7,25 @@ from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler, Tens
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
 
-import sys
-sys.path.append("..")
+
 
 from transformers import BertTokenizer
 from transformers import glue_output_modes as output_modes
 from transformers import glue_processors as processors
 from transformers import glue_convert_examples_to_features as convert_examples_to_features
 
-path = "../dataset/raw_data/text/" # temporary path, text.tsv / dev.tsv
-model_path = "../pretrained_weights/" # Bert model path
+
+model_path = "./pretrained_weights/" # Bert model path
 
 #Name不用单独放在一个文件夹了
-def load_and_cache_examples(task, tokenizer, datatype, evaluate=False):
+def load_and_cache_examples(task, tokenizer, datatype, path, evaluate=False):
     processor = processors[task]()
     output_mode = output_modes[task]
     label_list = processor.get_labels()
 
-    if datatype == 'train':
+    if datatype == 'training':
         examples, Video_id = processor.get_train_examples(path) # path file : postaddress must be .tsv
-    elif datatype == 'dev':
+    elif datatype == 'validation':
         examples, Video_id = processor.get_dev_examples(path)
     elif datatype == 'test':
         examples, Video_id = processor.get_test_examples(path) 
@@ -51,13 +50,14 @@ def load_and_cache_examples(task, tokenizer, datatype, evaluate=False):
     return data
 
 # Call. fuc.
-def preprocess_text(datatype):
+def preprocess_text(datatype, data_path):
     tokenizer = BertTokenizer.from_pretrained(model_path, do_lower_case=1, cache_dir=None)
-    data = load_and_cache_examples('pedt', tokenizer, datatype, evaluate=False)
+    data = load_and_cache_examples('pedt', tokenizer, datatype, data_path, evaluate=False)
     return data
 
 
 if __name__ == '__main__':
     import pdb
-    dataset = preprocess_text('test')
+    path = "../dataset/raw_data/text/"
+    dataset = preprocess_text('test', path)
     pdb.set_trace()

@@ -10,9 +10,8 @@ from pyAudioAnalysis import ShortTermFeatures
 import pdb
 
 
-path = "../dataset/raw_data/audio/"
-def preprocess_audio(data_type):
-    files_dir = os.path.join(path, data_type)
+def preprocess_audio(data_type, data_path):
+    files_dir = os.path.join(data_path, data_type)
     files_name = os.listdir(files_dir)
     mp3_files = filter(lambda file: file.split(".")[-1] == "mp3", files_name)  # filter out files in mp3 format
     mp3_files = list(mp3_files)
@@ -20,7 +19,6 @@ def preprocess_audio(data_type):
     # pdb.set_trace()
 
     data = dict()
-    lens = []
     for file in mp3_files:
         [Fs, x] = audioBasicIO.read_audio_file(os.path.join(files_dir, file))
         try:
@@ -32,18 +30,19 @@ def preprocess_audio(data_type):
         feature = np.concatenate([F0, F1], axis=0)
 
         seq_len = feature.shape[1]
-        lens.append(seq_len)
         if seq_len < 611:   # if seq_len < 611, pad to 611
             new_feature = np.zeros((68, 611))
             new_feature[:, :seq_len] = feature
-            feature = new_feature.transpose(0, 1)   # (611, 68)
+            feature = new_feature
+        feature = feature.transpose(0, 1)   # (611, 68)
 
         utterance_id = file[:-4]
         data[utterance_id] = {'feature': feature, 'seq_len': seq_len}
         
-    return lens, data
+    return data
 
 
 if __name__ == '__main__':
-    lens, dataset = preprocess_audio('test')
+    path = "../dataset/raw_data/audio/"
+    dataset = preprocess_audio('test', path)
     pdb.set_trace()

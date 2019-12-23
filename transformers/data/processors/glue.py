@@ -112,7 +112,7 @@ def glue_convert_examples_to_features(examples, tokenizer,
         if output_mode == "classification":
             label = label_map[example.label]
         elif output_mode == "regression":
-            label = [float(i) for i in example.label] #多标签嘛
+            label = float(example.label) #多标签嘛
         else:
             raise KeyError(output_mode)
 
@@ -122,7 +122,7 @@ def glue_convert_examples_to_features(examples, tokenizer,
             logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
             logger.info("attention_mask: %s" % " ".join([str(x) for x in attention_mask]))
             logger.info("token_type_ids: %s" % " ".join([str(x) for x in token_type_ids]))
-            logger.info("label: %s (id = %f)" % (example.label[0], label[0]))
+            logger.info("label: %s (id = %f)" % (example.label, label))
 
         features.append(
                 InputFeatures(input_ids=input_ids,
@@ -525,11 +525,11 @@ class PedtProcessor(DataProcessor):
 
     def get_train_examples(self, data_dir):
         """See base class."""
-        return self._create_examples(self._read_tsv(os.path.join(data_dir, "train.tsv")), "train")
+        return self._create_examples(self._read_tsv(os.path.join(data_dir, "training.tsv")), "train")
 
     def get_dev_examples(self, data_dir):
         """See base class."""
-        return self._create_examples(self._read_tsv(os.path.join(data_dir, "dev.tsv")), "dev")
+        return self._create_examples(self._read_tsv(os.path.join(data_dir, "validation.tsv")), "dev")
 
     def get_test_examples(self, data_dir):
         """See base class."""

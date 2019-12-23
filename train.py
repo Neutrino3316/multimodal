@@ -2,16 +2,16 @@ import argparse
 import pickle
 import os
 import random
-from tqdm import tqdm
+from tqdm import tqdm, trange
 import json
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from transformers import get_linear_schedule_with_warmup
+from transformers import AdamW, get_linear_schedule_with_warmup
 
-from data_utils import prepare_data
+from data_utils import prepare_data, prepare_inputs
 from models import TriModalModel
 
 import logging
@@ -23,30 +23,31 @@ def get_args():
     # file and directory settings
     parser.add_argument('--exp_name', type=str, required=True, help="name of the experiment, required to save checkpoint"
                                                                     "and training details")
+    parser.add_argument('--data_path', type=str, default="./dataset/", help="directory to data")
 
     # model settings
     ## overal settings
     parser.add_argument('--interview', action="store_true", help="whether to use")
     parser.add_argument('--out_dim', type=int, default=768, help="dimension of features before fusion")
     ## AudioModel settings
+    parser.add_argument('--audio_max_frames', type=int, default=600, help="max frames for audio")
     parser.add_argument('--audio_n_gru', type=int, default=2, help="number of gru layers")
+    parser.add_argument('--kernel_size', type=int, default=5, help="conv kernel size for audiomodel")
+    parser.add_argument('--padding', type=int, default=0)
+    parser.add_argument('--stride', type=int, default=2)
     ## VisionModel settings
-    parser.add_argument('--vision_n_lstm', type=int, default=1, help="number of lstm layers")
-    parser.add_argument('--vgg_param_dir', type=str, default="./dataset/pretrained_models/vgg_face_dag.pth")
+    parser.add_argument('--vision_n_gru', type=int, default=1, help="number of lstm layers")
+    parser.add_argument('--vgg_param_dir', type=str, default="./pretrained_weights/vgg_face_dag.pth")
     ## TextModel settings
     parser.add_argument('--model_name_or_path', default=None, type=str, required=True,
-                        help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS))
-    parser.add_argument('--textual_model_type', type=str, required=True, 
-                        help="Model type selected in the list: " + ", ".join(MODEL_CLASSES.keys()))
-    parser.add_argument('--config_name', default="", type=str,
-                        help="Pretrained config name or path if not the same as model_name"))
+                        help="Path to pre-trained model or shortcut name")
     parser.add_argument('--cache_dir', default="", type=str,
                         help="Where do you want to store the pre-trained models downloaded from s3")
     ## FusionModel settings
     parser.add_argument('--transformer_dropout', default=0.1, type=float, help="dropout rate for transformer")
     parser.add_argument('--n_fusion_layers', default=6, type=int, help="number of encoder layers for fusion module")
     parser.add_argument('--fusion_hid_dim', default=768, type=int, help="hidden size for encoder layers in fusion module")
-    parser.add_argument('--n_attn_heads', default=8, type=int, help="number of heads for attention")
+    parser.add_argument('--n_attn_heads', default=4, type=int, help="number of heads for attention")
     parser.add_argument('--fusion_ffw_dim', default=2048, type=int, help="dim for feed forward layers in encoder")
 
     # experiment settings
@@ -55,14 +56,13 @@ def get_args():
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--accum_steps', type=int, default=1, help="gradient accumulation steps")
     parser.add_argument('--lr', type=float, default=5e-5, help="initial learning rate")
-    parser.add_argument('--wd', type=float, default=0.0, help="weight decay")
+    parser.add_argument('--weight_decay', type=float, default=0.0, help="weight decay")
     parser.add_argument('--adam_epsilon', default=1e-8, type=float, help="Epsilon for Adam optimizer.")
     parser.add_argument('--warmup_steps', default=2000, type=int, help="Linear warmup over warmup_steps.")
     parser.add_argument('--max_grad_norm', default=5.0, type=float, help="Max gradient norm.")
     parser.add_argument('--seed', type=int, default=1212)
 
     # additional settings
-    parser.add_argument()
     parser.add_argument('--loss_exp', type=float, default=0.9, help="exponential loss averaging")
     parser.add_argument('--log_interval', type=int, default=10, help="steps to log training information")
 
@@ -99,16 +99,18 @@ class TriModalTrainer():
         self.labels_names = labels_names
         self.id2utter = id2utter
 
+        self.logger=logger
+
         self.n_valid, self.n_test = len(validset), len(testset)
         self.train_loader = DataLoader(dataset=trainset, batch_size=args.batch_size, shuffle=True)
         self.valid_loader = DataLoader(dataset=validset, batch_size=args.batch_size, shuffle=False)
         self.test_loader = DataLoader(dataset=testset, batch_size=args.batch_size, shuffle=False)
         
-        model.to(device)
+        model.to(args.device)
         self.model = model
 
-        self.args.total_steps = len(train_loader) // args.accum_steps * args.n_epochs
-        logger.info("Total training steps: %d" % total_steps)
+        self.args.total_steps = len(self.train_loader) // args.accum_steps * args.n_epochs
+        logger.info("Total training steps: %d" % self.args.total_steps)
 
         # Prepare opitimizer and schedule (linear warmup and decay)
         no_decay = ['bias', 'LayerNorm.weight']
@@ -117,7 +119,7 @@ class TriModalTrainer():
             {'params': [p for n, p in self.model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
             ]
         self.optimizer = AdamW(optimizer_grouped_parameters, lr=args.lr, eps=args.adam_epsilon)
-        self.scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=total_steps)
+        self.scheduler = get_linear_schedule_with_warmup(self.optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=self.args.total_steps)
 
         if args.n_gpu > 1:
             self.model = torch.nn.DataParallel(self.model)
@@ -146,7 +148,7 @@ class TriModalTrainer():
             batch = tuple(t.to(self.args.device) for t in batch)
             inputs = {'audio_feature': batch[1], 'audio_len': batch[2], 'vision_feature': batch[3], 
                 'text_input_ids': batch[4], 'text_attn_mask': batch[5], 'fusion_attn_mask': batch[6], 
-                'labels': batch[7]}
+                'extra_token_ids': batch[7], 'labels': batch[7]}
             outputs = model(**inputs)
             loss = outputs[0]
 
@@ -186,7 +188,7 @@ class TriModalTrainer():
             batch = tuple(t.to(self.args.device) for t in batch)
             inputs = {'audio_feature': batch[1], 'audio_len': batch[2], 'vision_feature': batch[3], 
                 'text_input_ids': batch[4], 'text_attn_mask': batch[5], 'fusion_attn_mask': batch[6], 
-                'labels': batch[7]}
+                'extra_token_ids': batch[7], 'labels': batch[7]}
 
             tmp_valid_loss, logits = model(**inputs)
             valid_loss += tmp_valid_loss.mean().item()
@@ -219,7 +221,7 @@ class TriModalTrainer():
             unique_id = batch[0]
             inputs = {'audio_feature': batch[1], 'audio_len': batch[2], 'vision_feature': batch[3], 
                 'text_input_ids': batch[4], 'text_attn_mask': batch[5], 'fusion_attn_mask': batch[6], 
-                'labels': batch[7]}
+                'extra_token_ids': batch[7], 'labels': batch[8]}
             tmp_test_loss, logits = model (**inputs)
             test_loss += tmp_test_loss.mean().item()
             tmp_err = torch.sum(torch.abs(inputs['labels'], logits), dim=0)
@@ -256,6 +258,8 @@ class TriModalTrainer():
 def remove_useless_checkpoint(out_dir, best_pt):
     all_files = os.listdir(out_dir)
     pt_files = list(filter(lambda file: file.split(".")[-1] == "pt", all_files))
+
+    pt_files = [os.path.join(out_dir, ptfile) for ptfile in pt_files]
     pt_files.remove(best_pt)
     for f in pt_files:
         os.remove(f)
@@ -271,10 +275,10 @@ if __name__ == '__main__':
     set_seed(args)
 
     out_dir = os.path.join("./snapshots/", args.exp_name)
-    if os.path.exists(out_dir):
-        raise ValueError("Output directory ({}) already exists.".format(out_dir))
-    else:
-        os.makedirs(out_dir)
+    # if os.path.exists(out_dir):
+    #     raise ValueError("Output directory ({}) already exists.".format(out_dir))
+    # else:
+    #     os.makedirs(out_dir)
 
     log_file = os.path.join(out_dir, "log.log")
     logging.basicConfig(filename=log_file, format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
@@ -290,8 +294,11 @@ if __name__ == '__main__':
     if os.path.exists(data_dir) and os.listdir(data_dir):
         trainset, validset, testset, id2utter = load_data()
     else:
-        trainset, validset = prepare_data('training'), prepare_data('validation')
-        testset, id2utter = prepare_data('test')
+        validset, trainset = prepare_data('validation', args.data_path), prepare_data('training', args.data_path)
+        testset, id2utter = prepare_data('test', args.data_path)
+
+    trainset, validset, testset = prepare_inputs(args, trainset), \
+        prepare_inputs(args, validset), prepare_inputs(args, testset)   # change to TensorDataset
 
     model = TriModalModel(args)
     trainer = TriModalTrainer(args, logger, model, trainset, validset, testset, 
@@ -302,5 +309,5 @@ if __name__ == '__main__':
     best_epoch = np.argmax(accuracy)
     input_model_file = os.path.join(out_dir, f"e_{best_epoch}.pt")
 
-    audio_trainer.test(input_model_file)
+    trainer.test(input_model_file)
     remove_useless_checkpoint(out_dir, input_model_file)

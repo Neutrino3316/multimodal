@@ -3,6 +3,8 @@ import torch.nn as nn
 
 import numpy as np
 
+import pdb
+
 
 class PositionwiseFeedForward(nn.Module):
     """docstring for PositionwiseFeedForward"""
@@ -28,16 +30,16 @@ class ScaleDotProductAttention(nn.Module):
 
     def forward(self, q, k, v, mask=None):
         """
-        q, k, v: [batch_size, file_size, word_embedding_size]
-        mask: batch x q_len x v_len
+        q, k, v: [batch_size, seq_len, dim] or [batch, numhead, seq_len, dim] (for multihead attention)
+        mask: batch x 1 x v_len or batch x 1 x 1 x v_len for multihead attention
         """
-        dk = q.shape[2]
-        attention = torch.bmm(q, k.transpose(1, 2)) / np.sqrt(dk)  # [b, n, m]*[b, m, n] batch matrix-matrix product
-        if mask:    
+        dk = q.shape[-1]
+        attention = torch.matmul(q, k.transpose(-1, -2)) / np.sqrt(dk)  # batch x q_len x v_len or batch x num_head x q_len x v_len
+        if mask is not None:    
             attention = attention + mask
-        attention = self.softmax(attention)
+        attention = self.softmax(attention)     # batch x q_len x v_len or batch x num_head x q_len x v_len
         attention = self.dropout(attention)
-        context = torch.bmm(attention, v)
+        context = torch.matmul(attention, v)    # batch x q_len x dk or batch x num_head x q_len x dk
         return context, attention
 
 
@@ -58,18 +60,19 @@ class MultiHeadAttention(nn.Module):
         num_head = self.num_head
         batch_size = key.shape[0]
         # linear projection
-        k = self.linear_k(key)
+        k = self.linear_k(key)  # k: batch x seq_len x (num_head*dim_perhead)
         q = self.linear_q(query)
         v = self.linear_v(value)
 
         # tensor transform
-        k = k.view(batch_size * num_head, -1, d)
-        q = q.view(batch_size * num_head, -1, d)
-        v = v.view(batch_size * num_head, -1, d)
+        k = k.view(batch_size, k.shape[1], num_head, d).permute(0, 2, 1, 3)    # batch x num_head x seq_len x dim_perhead
+        q = q.view(batch_size, q.shape[1], num_head, d).permute(0, 2, 1, 3)   
+        v = v.view(batch_size, v.shape[1], num_head, d).permute(0, 2, 1, 3)
 
         # self attention
-        context, attention = self.dotAttention(q, k, v, mask)
-        output = context.view(batch_size, -1, num_head * d)
+        context, attention = self.dotAttention(q, k, v, mask)   # batch x num_head x seq_len x dim_perhead
+        # output = context.view(batch_size, -1, num_head * d)
+        output = context.permute(0, 2, 1, 3).view(batch_size, -1, num_head * d)  # batch x seq_len x (num_head*dim_perhead)
 
         return output, attention
 
@@ -95,6 +98,7 @@ class EncoderLayer(nn.Module):
 class Encoder(nn.Module):
     def __init__(self, num_layers, model_dim, num_heads, ffw_dim, dropout):
         super(Encoder, self).__init__()
+        self.num_heads = num_heads
         self.encoder_layers = nn.ModuleList([EncoderLayer(model_dim, num_heads, ffw_dim, dropout) 
                                             for _ in range(num_layers)])
 
@@ -102,11 +106,16 @@ class Encoder(nn.Module):
         """
         mask: batch x v_len, 1 for real positions that are attended to, 0 for padded positions
         """
-        if attn_mask:
-            attn_mask = attn_mask.unsqueeze(1)    # batch x q_len x v_len
+        if attn_mask is not None:
+            attn_mask = attn_mask.unsqueeze(1)    # batch x 1 x v_len
+            if self.num_heads > 1:
+                attn_mask = attn_mask.unsqueeze(1)
             attn_mask = (1.0 - attn_mask) * -10000.0
 
         attentions = ()
+        
+        # pdb.set_trace() 
+
         for enc in self.encoder_layers:
             x, attention = enc(x, attn_mask)
             attentions = attentions + (attention, )
