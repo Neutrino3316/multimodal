@@ -72,7 +72,7 @@ class MultiHeadAttention(nn.Module):
         # self attention
         context, attention = self.dotAttention(q, k, v, mask)   # batch x num_head x seq_len x dim_perhead
         # output = context.view(batch_size, -1, num_head * d)
-        output = context.permute(0, 2, 1, 3).view(batch_size, -1, num_head * d)  # batch x seq_len x (num_head*dim_perhead)
+        output = context.permute(0, 2, 1, 3).contiguous().view(batch_size, -1, num_head * d)  # batch x seq_len x (num_head*dim_perhead)
 
         return output, attention
 

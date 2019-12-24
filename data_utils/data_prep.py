@@ -62,10 +62,8 @@ def prepare_inputs(args, dataset):
     unique_ids = torch.LongTensor([f.unique_id for f in dataset])
 
     acoustic_features = torch.FloatTensor([f.acoustic_feature for f in dataset])
-    acoustic_features = acoustic_features[:, :args.audio_max_frames, :]
+    acoustic_features = acoustic_features[:, :, :args.audio_max_frames]
     acoustic_lens = torch.FloatTensor([get_real_len(f.acoustic_len, args) for f in dataset])
-
-    # pdb.set_trace()
 
     visual_features = torch.stack([f.visual_feature for f in dataset])
     textual_input_ids = torch.stack([f.textual_input_ids for f in dataset])

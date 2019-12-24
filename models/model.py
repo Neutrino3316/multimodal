@@ -44,6 +44,7 @@ class AudioModel(nn.Module):
 
         conv_out = torch.transpose(x, 1, 2)    # (batch x seq_len x out_dim*2)
 
+        self.gru_layers.flatten_parameters()
         x, _ = self.gru_layers(conv_out)  # (batch x seq_len x out_dim*2)
         x = x + conv_out
         # pdb.set_trace()
@@ -71,6 +72,7 @@ class VGGModel(nn.Module):
         x = x.view(batch*seq_len, n_channel, dim1, dim2)
         x = self.vgg_face(x)    # (batch*seq_len, vgg_out_dim)
         x = x.view(batch, seq_len, self.vgg_out_dim)
+        self.lstm.flatten_parameters()
         x, _ = self.lstm(x)     # (batch, seq_len, out_dim*2)
         x = self.linear(x)
         return x
@@ -82,7 +84,7 @@ class ResNetModel(nn.Module):
         self.resnet = resnet18(pretrained=False)
         self.resnet_out_dim = 1000
         out_dim, dropout = args.out_dim, args.dropout
-        self.lstm = nn.GRU(input_size=self.resnet_out_dim, hidden_size=out_dim, num_layers=args.vision_n_gru, 
+        self.gru = nn.GRU(input_size=self.resnet_out_dim, hidden_size=out_dim, num_layers=args.vision_n_gru, 
                             batch_first=True, dropout=dropout, bidirectional=True)
         self.linear = nn.Sequential(nn.Linear(out_dim*2, out_dim),
                                     nn.ReLU(),
@@ -97,7 +99,8 @@ class ResNetModel(nn.Module):
         x = self.resnet(x)    # (batch*seq_len, resnet_out_dim)
 
         x = x.view(batch, seq_len, self.resnet_out_dim)
-        x, _ = self.lstm(x)     # (batch, seq_len, out_dim*2)
+        self.gru.flatten_parameters()
+        x, _ = self.gru(x)     # (batch, seq_len, out_dim*2)
         x = self.linear(x)
         return x
 
@@ -185,7 +188,7 @@ class TriModalModel(nn.Module):
             hidden_state = fusion_x[:, i]
             logit = clf(hidden_state)
             logits = logits + (logit, )
-        logits = torch.stack(logits, 1)
+        logits = torch.stack(logits, 1).squeeze(-1)
 
         outputs = (logits, )
         if labels is not None:

@@ -14,6 +14,8 @@ from transformers import AdamW, get_linear_schedule_with_warmup
 from data_utils import prepare_data, prepare_inputs
 from models import TriModalModel
 
+import pdb
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -81,6 +83,7 @@ def load_data():
         testset = pickle.load(f)
     with open(os.path.join(path, "test_id2utter.pkl"), "rb") as f:
         id2utter = pickle.load(f)
+
     return trainset, validset, testset, id2utter
 
 
@@ -106,8 +109,8 @@ class TriModalTrainer():
         self.valid_loader = DataLoader(dataset=validset, batch_size=args.batch_size, shuffle=False)
         self.test_loader = DataLoader(dataset=testset, batch_size=args.batch_size, shuffle=False)
         
-        model.to(args.device)
         self.model = model
+        self.model.to(args.device)
 
         self.args.total_steps = len(self.train_loader) // args.accum_steps * args.n_epochs
         logger.info("Total training steps: %d" % self.args.total_steps)
@@ -148,8 +151,8 @@ class TriModalTrainer():
             batch = tuple(t.to(self.args.device) for t in batch)
             inputs = {'audio_feature': batch[1], 'audio_len': batch[2], 'vision_feature': batch[3], 
                 'text_input_ids': batch[4], 'text_attn_mask': batch[5], 'fusion_attn_mask': batch[6], 
-                'extra_token_ids': batch[7], 'labels': batch[7]}
-            outputs = model(**inputs)
+                'extra_token_ids': batch[7], 'labels': batch[8]}
+            outputs = self.model(**inputs)
             loss = outputs[0]
 
             if self.args.n_gpu > 1:
@@ -171,37 +174,38 @@ class TriModalTrainer():
                 if (global_step + 1) % self.args.log_interval == 0:
                     lr = self.scheduler.get_lr()[0]
                     cur_loss = (tr_loss - logging_loss) / self.args.log_interval
-                    self.logger.info(f"Epoch: {epoch}; step {step}; lr {lr:.5f}; loss {cur_loss:.5f}")
+                    self.logger.info(f"Epoch: {epoch}; step {step}; lr {lr:.6f}; loss {cur_loss:.6f}")
                     logging_loss = tr_loss
         
         avg_loss = tr_loss / (step+1) * self.args.accum_steps
-        self.logger.info(f"-----Average loss for Epoch {epoch}: {avg_loss:.5f}-----")
+        self.logger.info(f"-----Average loss for Epoch {epoch}: {avg_loss:.6f}-----")
 
         return global_step
 
     def valid_one_epoch(self, epoch):
         self.model.eval()
         self.logger.info("***** Running Validation *****")
-        eval_loss = 0.0
-        error = np.zeros(self.model.num_labels)
+        valid_loss = 0.0
+        error = np.zeros(len(self.labels_names))
         for batch in tqdm(self.valid_loader, desc="Validation"):
             batch = tuple(t.to(self.args.device) for t in batch)
             inputs = {'audio_feature': batch[1], 'audio_len': batch[2], 'vision_feature': batch[3], 
                 'text_input_ids': batch[4], 'text_attn_mask': batch[5], 'fusion_attn_mask': batch[6], 
-                'extra_token_ids': batch[7], 'labels': batch[7]}
+                'extra_token_ids': batch[7], 'labels': batch[8]}
 
-            tmp_valid_loss, logits = model(**inputs)
+            tmp_valid_loss, logits = self.model(**inputs)
             valid_loss += tmp_valid_loss.mean().item()
-            tmp_err = torch.sum(torch.abs(inputs['labels'], logits), dim=0)
-            error = error + err.detach().cpu().numpy()
+            tmp_err = torch.sum(torch.abs(inputs['labels'] - logits), dim=0)
+            error = error + tmp_err.detach().cpu().numpy()
 
         error = error / self.n_valid
         accuracy = 1 - error
         avg_acc = np.mean(accuracy)
+        valid_loss = valid_loss / len(self.valid_loader)
 
-        log_str = f"Epoch {epoch}; accuracy {avg_acc}: "
+        log_str = f"Validation: epoch {epoch}; loss {valid_loss:.6f}; accuracy {avg_acc:.6f}: "
         for i, name in enumerate(self.labels_names):
-            log_str += f"{name} {accuracy[i]}/"
+            log_str += f"{name} {accuracy[i]:.6f}/"
         self.logger.info(log_str)
 
         return avg_acc
@@ -214,7 +218,7 @@ class TriModalTrainer():
 
         predictions = dict()
         test_loss = 0.
-        error = np.zeros(self.n_labels)
+        error = np.zeros(len(self.labels_names))
         for batch in tqdm(self.test_loader, desc="Testing"):
             batch = tuple(t.to(args.device) for t in batch)
 
@@ -222,10 +226,10 @@ class TriModalTrainer():
             inputs = {'audio_feature': batch[1], 'audio_len': batch[2], 'vision_feature': batch[3], 
                 'text_input_ids': batch[4], 'text_attn_mask': batch[5], 'fusion_attn_mask': batch[6], 
                 'extra_token_ids': batch[7], 'labels': batch[8]}
-            tmp_test_loss, logits = model (**inputs)
+            tmp_test_loss, logits = self.model(**inputs)
             test_loss += tmp_test_loss.mean().item()
-            tmp_err = torch.sum(torch.abs(inputs['labels'], logits), dim=0)
-            error = error + err.detach().cpu().numpy()
+            tmp_err = torch.sum(torch.abs(inputs['labels'] - logits), dim=0)
+            error = error + tmp_err.detach().cpu().numpy()
 
             preds = logits.detach().cpu().numpy()
             for i, id in enumerate(unique_id.detach().cpu().numpy().tolist()):
@@ -237,10 +241,11 @@ class TriModalTrainer():
         error = error / self.n_test
         accuracy = 1 - error
         avg_acc = np.mean(accuracy)
+        test_loss = test_loss / len(self.test_loader)
 
-        log_str = f"Epoch {epoch}; accuracy {avg_acc}: "
+        log_str = f"Test loss: {test_loss:.6f}; accuracy {avg_acc:.6f}: "
         for i, name in enumerate(self.labels_names):
-            log_str += f"{name} {accuracy[i]}/"
+            log_str += f"{name} {accuracy[i]:.6f}/"
         self.logger.info(log_str)
 
         out_dir = os.path.join("./snapshots/", self.args.exp_name)
