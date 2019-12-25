@@ -38,10 +38,9 @@ def gather_features(data_type, acoustic_data, visual_data, textual_data, labels)
         vidual_input = visual_data[key]
         textual_input = textual_data[key]
         label = labels[key]
-
         dataset.append(Input_Features(acoustic_input, vidual_input, textual_input, label, unique_id))
-        unique_id += 1
         id2utter[unique_id] = key
+        unique_id += 1
     if data_type == 'test':
         return dataset, id2utter
     return dataset

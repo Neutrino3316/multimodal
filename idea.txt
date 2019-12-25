@@ -3,3 +3,5 @@
 3. no lstm for visual uni-encoding
 4. initialize CLS tokens with average outputs of unimodal
 5. use the first order difference of audio features
+6. address the heterogeneity
+7. generate new example by masking different positions -- address the imbalance issue

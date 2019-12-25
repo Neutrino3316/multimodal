@@ -65,7 +65,6 @@ def get_args():
     parser.add_argument('--seed', type=int, default=1212)
 
     # additional settings
-    parser.add_argument('--loss_exp', type=float, default=0.9, help="exponential loss averaging")
     parser.add_argument('--log_interval', type=int, default=10, help="steps to log training information")
 
     args = parser.parse_args()
@@ -280,10 +279,10 @@ if __name__ == '__main__':
     set_seed(args)
 
     out_dir = os.path.join("./snapshots/", args.exp_name)
-    # if os.path.exists(out_dir):
-    #     raise ValueError("Output directory ({}) already exists.".format(out_dir))
-    # else:
-    #     os.makedirs(out_dir)
+    if os.path.exists(out_dir):
+        raise ValueError("Output directory ({}) already exists.".format(out_dir))
+    else:
+        os.makedirs(out_dir)
 
     log_file = os.path.join(out_dir, "log.log")
     logging.basicConfig(filename=log_file, format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',

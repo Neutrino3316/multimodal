@@ -33,7 +33,7 @@ class AudioModel(nn.Module):
     def forward(self, x, seq_lens):
         """
 
-        :param x: (batch x seq_len x dim) where dim=68
+        :param x: (batch x dim x seq_len) where dim=68
         :param seq_lens: batch
         :return:
         """
@@ -54,7 +54,7 @@ class AudioModel(nn.Module):
 
 class VGGModel(nn.Module):
     def __init__(self, args):
-        super(VisionModel, self).__init__()
+        super(VGGModel, self).__init__()
         self.vgg_face = build_vgg(args.vgg_param_dir)
         self.vgg_out_dim = 2622
         out_dim, dropout = args.out_dim, args.dropout
@@ -171,7 +171,6 @@ class TriModalModel(nn.Module):
                 text_attn_mask, fusion_attn_mask, extra_token_ids, labels=None):
         audio_x = self.audio_module(audio_feature, audio_len)
         text_x = self.text_module(text_input_ids, text_attn_mask)
-
         vision_x = self.vision_module(vision_feature)
 
         # pdb.set_trace()
