@@ -121,7 +121,7 @@ class TriModalTrainer():
             {'params': [p for n, p in self.model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
             ]
         self.optimizer = AdamW(optimizer_grouped_parameters, lr=args.lr, eps=args.adam_epsilon)
-        self.scheduler = get_linear_schedule_with_warmup(self.optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=self.args.total_steps)
+        # self.scheduler = get_linear_schedule_with_warmup(self.optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=self.args.total_steps)
 
         if args.n_gpu > 1:
             self.model = torch.nn.DataParallel(self.model)
@@ -166,14 +166,14 @@ class TriModalTrainer():
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
 
                 self.optimizer.step()
-                self.scheduler.step()
+                # self.scheduler.step()
                 self.model.zero_grad()
                 global_step += 1
 
                 if (global_step + 1) % self.args.log_interval == 0:
-                    lr = self.scheduler.get_lr()[0]
+                    # lr = self.scheduler.get_lr()[0]
                     cur_loss = (tr_loss - logging_loss) / self.args.log_interval
-                    self.logger.info(f"Epoch: {epoch}; step {step}; lr {lr:.6f}; loss {cur_loss:.6f}")
+                    self.logger.info(f"Epoch: {epoch}; step {step}; lr {self.args.lr:.6f}; loss {cur_loss:.6f}")
                     logging_loss = tr_loss
         
         avg_loss = tr_loss / (step+1) * self.args.accum_steps

@@ -165,7 +165,7 @@ class TriModalModel(nn.Module):
                                             nn.Dropout(args.dropout),
                                             nn.Linear(args.out_dim//2, 1),
                                             nn.Sigmoid())
-                                         for _ in range(self.num_labels)])
+                                         for _ in range(self.num_labels)])   # or use grouped conv1d to avoid for loop   TODO
 
     def forward(self, audio_feature, audio_len, vision_feature, text_input_ids, 
                 text_attn_mask, fusion_attn_mask, extra_token_ids, labels=None):
