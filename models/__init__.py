@@ -1,1 +1,1 @@
-from .model import TriModalModel
+from .model import TriModalModel, AvgModalModel

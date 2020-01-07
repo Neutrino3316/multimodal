@@ -1,2 +1,2 @@
-CUDA_VISIBLE_DEVICES=2,3 python train.py --exp_name adamw_nlayer_4_ffw_2048_lr0.0001 --model_name_or_path ./pretrained_weights/ --n_fusion_layers 4 --fusion_ffw_dim 2048 --batch_size 8 --accum_steps 8 --n_epochs 30 --lr 0.0001
-CUDA_VISIBLE_DEVICES=2,3 python train.py --exp_name adamw_nlayer_4_ffw_1024_lr0.0001 --model_name_or_path ./pretrained_weights/ --n_fusion_layers 4 --fusion_ffw_dim 1024 --batch_size 8 --accum_steps 8 --n_epochs 30 --lr 0.0001
+CUDA_VISIBLE_DEVICES=2,3 python train.py --exp_name avg_gelu_preres --model_name_or_path ./pretrained_weights/ --n_epochs 60 --batch_size 8 --accum_steps 8 --lr 0.0001 --model_type AvgModalModel --pretrained_resnet
+CUDA_VISIBLE_DEVICES=2,3 python train.py --exp_name avg_gelu --model_name_or_path ./pretrained_weights/ --n_epochs 60 --batch_size 8 --accum_steps 8 --lr 0.0001 --model_type AvgModalModel

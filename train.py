@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from transformers import AdamW, get_linear_schedule_with_warmup
 
 from data_utils import prepare_data, prepare_inputs
-from models import TriModalModel
+from models import TriModalModel, AvgModalModel
 
 import pdb
 
@@ -29,6 +29,7 @@ def get_args():
 
     # model settings
     ## overal settings
+    parser.add_argument('--model_type', type=str, default="TriModalModel", help="options: ['TriModalModel', 'AvgModalModel']")
     parser.add_argument('--interview', action="store_true", help="whether to use")
     parser.add_argument('--out_dim', type=int, default=768, help="dimension of features before fusion")
     ## AudioModel settings
@@ -38,6 +39,7 @@ def get_args():
     parser.add_argument('--padding', type=int, default=0)
     parser.add_argument('--stride', type=int, default=2)
     ## VisionModel settings
+    parser.add_argument('--pretrained_resnet', action='store_true')
     parser.add_argument('--vision_n_gru', type=int, default=1, help="number of lstm layers")
     parser.add_argument('--vgg_param_dir', type=str, default="./pretrained_weights/vgg_face_dag.pth")
     ## TextModel settings
@@ -192,7 +194,7 @@ class TriModalTrainer():
                 'text_input_ids': batch[4], 'text_attn_mask': batch[5], 'fusion_attn_mask': batch[6], 
                 'extra_token_ids': batch[7], 'labels': batch[8]}
 
-            tmp_valid_loss, logits = self.model(**inputs)
+            tmp_valid_loss, logits, _ = self.model(**inputs)
             valid_loss += tmp_valid_loss.mean().item()
             tmp_err = torch.sum(torch.abs(inputs['labels'] - logits), dim=0)
             error = error + tmp_err.detach().cpu().numpy()
@@ -216,6 +218,7 @@ class TriModalTrainer():
         self.model.eval()
 
         predictions = dict()
+        attention_scores = []
         test_loss = 0.
         error = np.zeros(len(self.labels_names))
         for batch in tqdm(self.test_loader, desc="Testing"):
@@ -225,7 +228,8 @@ class TriModalTrainer():
             inputs = {'audio_feature': batch[1], 'audio_len': batch[2], 'vision_feature': batch[3], 
                 'text_input_ids': batch[4], 'text_attn_mask': batch[5], 'fusion_attn_mask': batch[6], 
                 'extra_token_ids': batch[7], 'labels': batch[8]}
-            tmp_test_loss, logits = self.model(**inputs)
+            tmp_test_loss, logits, attns = self.model(**inputs)
+            attention_scores.append([attn.detach().cpu().numpy() for attn in attns])
             test_loss += tmp_test_loss.mean().item()
             tmp_err = torch.sum(torch.abs(inputs['labels'] - logits), dim=0)
             error = error + tmp_err.detach().cpu().numpy()
@@ -250,6 +254,9 @@ class TriModalTrainer():
         out_dir = os.path.join("./snapshots/", self.args.exp_name)
         with open(os.path.join(out_dir, "predictions.json"), "w") as f:
             json.dump(predictions, f)
+        
+        with open(os.path.join(out_dir, "attn_scores.pkl"), "wb") as f:
+            pickle.dump(attention_scores, f)
 
 
     def save_checkpoint(self, epoch):
@@ -304,7 +311,9 @@ if __name__ == '__main__':
     trainset, validset, testset = prepare_inputs(args, trainset), \
         prepare_inputs(args, validset), prepare_inputs(args, testset)   # change to TensorDataset
 
-    model = TriModalModel(args)
+    model_dict = {'TriModalModel': TriModalModel, 'AvgModalModel': AvgModalModel}
+    model = model_dict[args.model_type](args)
+    # model = TriModalModel(args)
     trainer = TriModalTrainer(args, logger, model, trainset, validset, testset, 
                             labels_names, id2utter)
 

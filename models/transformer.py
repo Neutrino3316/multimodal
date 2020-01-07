@@ -2,8 +2,20 @@ import torch
 import torch.nn as nn
 
 import numpy as np
+import math
 
 import pdb
+
+
+def gelu(x):
+    return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
+
+class GELU(nn.Module):
+    def __init__(self):
+        super(GELU, self).__init__()
+
+    def forward(self, x):
+        return gelu(x)
 
 
 class PositionwiseFeedForward(nn.Module):
@@ -13,7 +25,7 @@ class PositionwiseFeedForward(nn.Module):
         super(PositionwiseFeedForward, self).__init__()
         self.w1 = nn.Linear(d_in, d_hid)
         self.w2 = nn.Linear(d_hid, d_in)
-        self.relu = nn.ReLU()
+        self.relu = GELU()
 
     def forward(self, x):
         output = self.w2(self.relu(self.w1(x)))
